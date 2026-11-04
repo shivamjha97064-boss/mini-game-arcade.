@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fruit Blade Arcade</title>
+  <style>
+    * { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; }
+    body { margin: 0; padding: 0; background-color: #0b0f19; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; color: white; width: 100vw; height: 100vh; position: relative; }
+    canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+    .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; }
+    .btn { background: linear-gradient(135deg, #f59e0b, #ef4444); color: white; border: none; font-weight: 800; border-radius: 14px; cursor: pointer; padding: 12px 20px; font-size: 16px; width: 100%; }
+    .overlay { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(5, 8, 16, 0.88); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Top Bar -->
+  <div style="position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; pointer-events: none;">
+    <div class="glass" style="padding: 8px 16px; display: flex; gap: 16px; pointer-events: auto;">
+      <div>
+        <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Score</div>
+        <div id="scoreVal" style="font-size: 20px; font-weight: 900; color: #fbbf24;">0</div>
+      </div>
+      <div style="width: 1px; background: #334155;"></div>
+      <div>
+        <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Time</div>
+        <div id="timerVal" style="font-size: 20px; font-weight: 900; color: #34d399;">60s</div>
+      </div>
+    </div>
+    <div class="glass" style="padding: 6px 10px; display: flex; gap: 8px; pointer-events: auto;">
+      <a href="index.html" style="color: #fbbf24; text-decoration: none; font-size: 14px; font-weight: bold; padding: 4px 8px;">🏠 Home</a>
+      <button id="soundBtn" style="background: transparent; border: none; font-size: 18px; color: white;">🔊</button>
+    </div>
+  </div>
+
+  <!-- Start Overlay -->
+  <div id="startOverlay" class="overlay">
+    <div class="glass" style="max-width: 320px; width: 100%; padding: 24px; text-align: center;">
+      <div style="font-size: 40px; margin-bottom: 8px;">🍉 ⚔️</div>
+      <h1 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 900; color: #fbbf24;">FRUIT BLADE</h1>
+      <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 16px; line-height: 1.4;">Drag finger to slice fruits. Slice multiple for combos! Avoid bombs.</p>
+      <button id="startBtn" class="btn">PLAY NOW</button>
+      <a href="index.html" style="display: block; margin-top: 14px; color: #94a3b8; text-decoration: none; font-size: 13px;">← Back to Arcade</a>
+    </div>
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div id="msgOverlay" class="overlay hidden">
+    <div class="glass" style="max-width: 320px; width: 100%; padding: 24px; text-align: center;">
+      <div id="msgIcon" style="font-size: 40px; margin-bottom: 8px;">💥</div>
+      <h2 id="msgTitle" style="margin: 0 0 6px 0; font-size: 22px; font-weight: 900;">GAME OVER</h2>
+      <p id="msgDesc" style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">You sliced a bomb!</p>
+      <div style="display: flex; justify-content: space-around; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 12px; margin-bottom: 16px;">
+        <div>
+          <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Score</div>
+          <div id="finalScore" style="font-size: 20px; font-weight: 900; color: #fbbf24;">0</div>
+        </div>
+        <div>
+          <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Best</div>
+          <div id="highScore" style="font-size: 20px; font-weight: 900; color: #34d399;">0</div>
+        </div>
+      </div>
+      <button id="restartBtn" class="btn">PLAY AGAIN</button>
+      <a href="index.html" style="display: block; margin-top: 14px; color: #94a3b8; text-decoration: none; font-size: 13px;">← Back to Arcade</a>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let audioCtx = null, soundEnabled = true;
+    function playTone(freq, type, dur) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain
