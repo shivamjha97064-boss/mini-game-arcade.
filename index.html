@@ -1,38 +1,148 @@
-<!DOCTY        this.rot = 0;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fruit Blade Arcade</title>
+  <style>
+    * { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; box-sizing: border-box; }
+    body { margin: 0; padding: 0; background-color: #0b0f19; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; color: white; width: 100vw; height: 100vh; position: relative; }
+    canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+    .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 16px; }
+    .btn { background: linear-gradient(135deg, #f59e0b, #ef4444); color: white; border: none; font-weight: 800; border-radius: 14px; cursor: pointer; padding: 12px 20px; font-size: 16px; width: 100%; }
+    .overlay { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(5, 8, 16, 0.88); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Top Bar -->
+  <div style="position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; pointer-events: none;">
+    <div class="glass" style="padding: 8px 16px; display: flex; gap: 16px; pointer-events: auto;">
+      <div>
+        <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Score</div>
+        <div id="scoreVal" style="font-size: 20px; font-weight: 900; color: #fbbf24;">0</div>
+      </div>
+      <div style="width: 1px; background: #334155;"></div>
+      <div>
+        <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Time</div>
+        <div id="timerVal" style="font-size: 20px; font-weight: 900; color: #34d399;">60s</div>
+      </div>
+    </div>
+    <div class="glass" style="padding: 6px 10px; display: flex; gap: 8px; pointer-events: auto;">
+      <button id="soundBtn" style="background: transparent; border: none; font-size: 18px; color: white;">🔊</button>
+      <button id="pauseBtn" style="background: transparent; border: none; font-size: 18px; color: white; font-weight: bold;">⏸</button>
+    </div>
+  </div>
+
+  <!-- Start Overlay -->
+  <div id="startOverlay" class="overlay">
+    <div class="glass" style="max-width: 320px; width: 100%; padding: 24px; text-align: center;">
+      <div style="font-size: 40px; margin-bottom: 8px;">🍉 ⚔️</div>
+      <h1 style="margin: 0 0 8px 0; font-size: 22px; font-weight: 900; color: #fbbf24;">FRUIT BLADE</h1>
+      <p style="font-size: 13px; color: #cbd5e1; margin-bottom: 16px; line-height: 1.4;">Drag finger to slice fruits. Slice multiple for combos! Avoid bombs.</p>
+      <button id="startBtn" class="btn">PLAY NOW</button>
+      
+      <!-- Policy Links -->
+      <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #334155; display: flex; justify-content: center; gap: 12px; font-size: 12px;">
+        <a href="about.html" style="color: #94a3b8; text-decoration: underline;">About</a>
+        <a href="privacy.html" style="color: #94a3b8; text-decoration: underline;">Privacy</a>
+        <a href="contact.html" style="color: #94a3b8; text-decoration: underline;">Contact</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Overlay -->
+  <div id="msgOverlay" class="overlay hidden">
+    <div class="glass" style="max-width: 320px; width: 100%; padding: 24px; text-align: center;">
+      <div id="msgIcon" style="font-size: 40px; margin-bottom: 8px;">💥</div>
+      <h2 id="msgTitle" style="margin: 0 0 6px 0; font-size: 22px; font-weight: 900;">GAME OVER</h2>
+      <p id="msgDesc" style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">You sliced a bomb!</p>
+      <div style="display: flex; justify-content: space-around; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 12px; margin-bottom: 16px;">
+        <div>
+          <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Score</div>
+          <div id="finalScore" style="font-size: 20px; font-weight: 900; color: #fbbf24;">0</div>
+        </div>
+        <div>
+          <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Best</div>
+          <div id="highScore" style="font-size: 20px; font-weight: 900; color: #34d399;">0</div>
+        </div>
+      </div>
+      <button id="restartBtn" class="btn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+    function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let audioCtx = null, soundEnabled = true;
+    function playTone(freq, type, dur) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch(e) {}
+    }
+
+    const FRUITS = [
+      { r: 38, c: '#10b981', f: '#f43f5e', pts: 10 },
+      { r: 34, c: '#f97316', f: '#fb923c', pts: 12 },
+      { r: 30, c: '#eab308', f: '#fde047', pts: 15 },
+      { r: 28, c: '#8b5cf6', f: '#a855f7', pts: 15 }
+    ];
+
+    let gameState = 'ready', score = 0, hi = parseInt(localStorage.getItem('fb_hi') || '0');
+    let timeLeft = 60, timerId = null, spawnTimer = 0;
+    let items = [], particles = [], trail = [], isSwiping = false;
+
+    class Item {
+      constructor() {
+        this.isBomb = Math.random() < 0.22;
+        this.t = this.isBomb ? null : FRUITS[Math.floor(Math.random() * FRUITS.length)];
+        this.r = this.isBomb ? 32 : this.t.r;
+        this.x = W * 0.15 + Math.random() * (W * 0.7);
+        this.y = H + this.r;
+        this.vx = (W / 2 - this.x) * (0.008 + Math.random() * 0.006);
+        this.vy = -(H * (0.016 + Math.random() * 0.006));
+        this.gravity = H * 0.00032;
+        this.rot = 0;
         this.vRot = (Math.random() - 0.5) * 0.08;
         this.sliced = false;
       }
       update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        this.vy += this.gravity;
-        this.rot += this.vRot;
+        this.x += this.vx; this.y += this.vy; this.vy += this.gravity; this.rot += this.vRot;
       }
       draw() {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rot);
+        ctx.beginPath();
+        ctx.arc(0, 0, this.r, 0, Math.PI * 2);
         if (this.isBomb) {
-          ctx.beginPath();
-          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-          ctx.fillStyle = '#1e293b';
-          ctx.fill();
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = '#ef4444';
-          ctx.stroke();
-          ctx.fillStyle = '#f59e0b';
-          ctx.beginPath();
-          ctx.arc(this.radius * 0.5, -this.radius * 0.5, 6, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillStyle = '#1e293b'; ctx.fill();
+          ctx.lineWidth = 3; ctx.strokeStyle = '#ef4444'; ctx.stroke();
+          ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(this.r * 0.5, -this.r * 0.5, 6, 0, Math.PI * 2); ctx.fill();
         } else {
-          ctx.beginPath();
-          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-          ctx.fillStyle = this.type.color;
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(0, 0, this.radius * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = this.type.flesh;
-          ctx.fill();
+          ctx.fillStyle = this.t.c; ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, this.r * 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = this.t.f; ctx.fill();
         }
         ctx.restore();
       }
@@ -40,11 +150,117 @@
 
     class Particle {
       constructor(x, y, color) {
-        this.x = x; this.y = y; this.color = color;
-        this.vx = (Math.random() - 0.5) * 12;
-        this.vy = (Math.random() - 0.5) * 12;
+        this.x = x; this.y = y; this.c = color;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10;
         this.life = 1;
-        this.decay = 0.03 + Math.random() * 0.03;
-        this.size = 3 + Math.random() * 5;
       }
-      update() { this.x += this.vx; this.y += this.vy; this.life -= this.decay; }
+      update() { this.x += this.vx; this.y += this.vy; this.life -= 0.04; }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.c;
+        ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function checkSlice(p1, p2) {
+      for (let item of items) {
+        if (item.sliced) continue;
+        const d = Math.hypot(item.x - p2.x, item.y - p2.y);
+        if (d < item.r + 15) {
+          item.sliced = true;
+          if (item.isBomb) {
+            playTone(120, 'sawtooth', 0.5);
+            for (let i = 0; i < 25; i++) particles.push(new Particle(item.x, item.y, '#ef4444'));
+            gameOver(true);
+            return;
+          } else {
+            playTone(450 + Math.random() * 200, 'sine', 0.1);
+            score += item.t.pts;
+            document.getElementById('scoreVal').innerText = score;
+            for (let i = 0; i < 15; i++) particles.push(new Particle(item.x, item.y, item.t.f));
+          }
+        }
+      }
+    }
+
+    function startGame() {
+      gameState = 'playing'; score = 0; timeLeft = 60;
+      items = []; particles = []; trail = [];
+      document.getElementById('scoreVal').innerText = '0';
+      document.getElementById('timerVal').innerText = '60s';
+      document.getElementById('startOverlay').classList.add('hidden');
+      document.getElementById('msgOverlay').classList.add('hidden');
+      clearInterval(timerId);
+      timerId = setInterval(() => {
+        if (gameState !== 'playing') return;
+        timeLeft--;
+        document.getElementById('timerVal').innerText = timeLeft + 's';
+        if (timeLeft <= 0) gameOver(false);
+      }, 1000);
+    }
+
+    function gameOver(bomb) {
+      gameState = 'over';
+      clearInterval(timerId);
+      if (score > hi) { hi = score; localStorage.setItem('fb_hi', hi); }
+      document.getElementById('msgIcon').innerText = bomb ? '💥' : '⏰';
+      document.getElementById('msgTitle').innerText = bomb ? 'BOOM!' : 'TIME UP!';
+      document.getElementById('msgDesc').innerText = bomb ? 'You sliced a bomb!' : 'Great run!';
+      document.getElementById('finalScore').innerText = score;
+      document.getElementById('highScore').innerText = hi;
+      document.getElementById('msgOverlay').classList.remove('hidden');
+    }
+
+    function addTrail(x, y) {
+      trail.push({ x, y, life: 1 });
+      if (trail.length > 1) checkSlice(trail[trail.length - 2], trail[trail.length - 1]);
+    }
+
+    window.addEventListener('pointerdown', (e) => { isSwiping = true; trail = []; addTrail(e.clientX, e.clientY); });
+    window.addEventListener('pointermove', (e) => { if (isSwiping) addTrail(e.clientX, e.clientY); });
+    window.addEventListener('pointerup', () => { isSwiping = false; });
+
+    document.getElementById('startBtn').onclick = startGame;
+    document.getElementById('restartBtn').onclick = startGame;
+    document.getElementById('soundBtn').onclick = () => {
+      soundEnabled = !soundEnabled;
+      document.getElementById('soundBtn').innerText = soundEnabled ? '🔊' : '🔇';
+    };
+    document.getElementById('pauseBtn').onclick = () => {
+      if (gameState === 'playing') { gameState = 'paused'; document.getElementById('pauseBtn').innerText = '▶️'; }
+      else if (gameState === 'paused') { gameState = 'playing'; document.getElementById('pauseBtn').innerText = '⏸'; }
+    };
+
+    function loop() {
+      ctx.clearRect(0, 0, W, H);
+      if (gameState === 'playing') {
+        spawnTimer++;
+        if (spawnTimer % 45 === 0) items.push(new Item());
+      }
+      for (let i = items.length - 1; i >= 0; i--) {
+        items[i].update(); items[i].draw();
+        if (items[i].y > H + 100 || items[i].sliced) items.splice(i, 1);
+      }
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update(); particles[i].draw();
+        if (particles[i].life <= 0) particles.splice(i, 1);
+      }
+      if (trail.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(trail[0].x, trail[0].y);
+        for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
+      }
+      for (let i = trail.length - 1; i >= 0; i--) {
+        trail[i].life -= 0.15;
+        if (trail[i].life <= 0) trail.splice(i, 1);
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
